@@ -1,6 +1,9 @@
 {
     "name": "python-dev",
-    "image": "docker.io/rkrispin/python-dev-template:0.0.1",
+    	"dockerComposeFile": ["../docker-compose.yaml"],
+	"service": "python",
+	"shutdownAction": "none",
+	"workspaceFolder": "/workspace/",
     "customizations": {
         "vscode": {
             "settings": {
@@ -35,7 +38,9 @@
                 // Misc
                 "streetsidesoftware.code-spell-checker",
                 // Code
-                "continue.continue"
+                "continue.continue",
+                // DB
+                "ms-ossdata.vscode-pgsql"
 
             ]
         }

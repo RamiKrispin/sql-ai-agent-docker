@@ -2,7 +2,7 @@
 
 # Image settings
 user_name=rkrispin
-project_name="template"
+project_name="sql-ai-agent"
 image_label=python-dev-$project_name
 tag=0.0.1
 python_ver=3.11
