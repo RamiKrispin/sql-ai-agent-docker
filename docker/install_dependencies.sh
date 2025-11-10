@@ -62,7 +62,8 @@ echo "alias c=clear" >> ${ZDOTDIR:-$HOME}/.zshrc
 
 
 
-
+# Installing OpenCode
+curl -fsSL https://opencode.ai/install | bash -s -- --path /usr/local/bin
 
 # Adding fastfetch
 add-apt-repository -y ppa:zhangsongcui3371/fastfetch

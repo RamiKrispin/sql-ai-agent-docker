@@ -28,6 +28,7 @@
                 "streetsidesoftware.code-spell-checker",
                 "tamasfe.even-better-toml",
                 "aaron-bond.better-comments",
+                "hediet.vscode-drawio",
                 //Code
                 "oderwat.indent-rainbow",
                 // Data
@@ -41,7 +42,6 @@
                 "continue.continue",
                 // DB
                 "ms-ossdata.vscode-pgsql"
-
             ]
         }
     },
