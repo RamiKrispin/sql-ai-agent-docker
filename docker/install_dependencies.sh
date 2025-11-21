@@ -20,6 +20,7 @@ apt-get update && apt-get install -y --no-install-recommends \
    unzip \
    fontconfig \
    software-properties-common \
+   libpq-dev \
    && rm -rf /var/lib/apt/lists/*
 
 # Installing oh my zsh

@@ -3,7 +3,7 @@
 # Image settings
 user_name=rkrispin
 image_label=python-base
-tag=0.0.2
+tag=0.0.3
 quarto_ver="1.8.24"
 dockerfile="Dockerfile_Base"
 
