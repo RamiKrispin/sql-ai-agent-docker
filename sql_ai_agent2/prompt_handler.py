@@ -1,64 +1,42 @@
-import duckdb as db
-from dataclasses import dataclass
+from langchain_core.prompts import ChatPromptTemplate
 
-
-@dataclass
-class TableAttributes:
-    col_names: list[str]
-    col_types: list[str]
-    tbl_schema: str
-
-
-def get_tbl_attr(tbl_name: str) -> TableAttributes:
+def set_prompt(question: str, tbl_name: str, schema: str, additional_context: str = ""):
     """
-    Get column names, types, and schema definition string for a DuckDB table.
+    Build a LangChain ChatPromptTemplate for SQL generation.
+
+    Parameters
+    ----------
+    question : str
+        Natural language question describing the SQL request.
+    tbl_name : str
+        Name of the SQL table.
+    schema : str
+        Table schema (column definitions).
+    additional_context : str, optional
+        Extra system context. Defaults to empty string.
+
+    Returns
+    -------
+    ChatPromptTemplate
+        A LangChain prompt template ready to be invoked.
     """
 
-    # Query schema
-    table_schema = db.sql(f"DESCRIBE SELECT * FROM {tbl_name};").df()
-    col_info = table_schema[["column_name", "column_type"]]
+    system_template = """
+Given the following SQL table, your job is to write queries given a user’s request.
+Return just the SQL query as plain text, without additional text, and don't use markdown format.
+{additional_context}
+CREATE TABLE {tbl_name} ({schema})
+""".strip()
 
-    # Build schema string
-    schema_str = ", ".join(
-        f"{name} {dtype}"
-        for name, dtype in zip(col_info["column_name"], col_info["column_type"])
-    )
+    user_template = "Write a SQL query that returns: {question}"
 
-    return TableAttributes(
-        col_names=col_info["column_name"].tolist(),
-        col_types=col_info["column_type"].tolist(),
-        tbl_schema=schema_str,
-    )
+    messages = [
+        ("system", system_template),
+        ("user", user_template)
+    ]
 
+    prompt_template = ChatPromptTemplate.from_messages(messages)
 
-@dataclass
-class SystemPrompt:
-    system: str
-    schema: str
-    col_names: str
-    col_types: str
-    tbl_name: str
+    prompt = prompt_template.invoke({"tbl_name": tbl_name, "schema": schema, "additional_context": additional_context, "question": question })
 
-
-def system_prompt(tbl_name):
-    # Get table schema
-    tbl_attr = get_tbl_attr(tbl_name=tbl_name)
-
-    # Prompt templates
-    system_template = (
-        "Given the following SQL table, your job is to write queries given a user’s request. "
-        "Return just the SQL query as plain text, without additional text, and don't use markdown format.\n\n"
-        f"CREATE TABLE {tbl_name} ({tbl_attr.tbl_schema})\n"
-    )
-    return SystemPrompt(
-        system=system_template,
-        schema=tbl_attr.tbl_schema,
-        col_names=tbl_attr.col_names,
-        col_types=tbl_attr.col_types,
-        tbl_name=tbl_name,
-    )
-
-
-def user_prompt(question):
-    user_template = f"Write a SQL query that returns: {question}"
-    return user_template
+    return prompt
