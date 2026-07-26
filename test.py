@@ -4,11 +4,16 @@ import ibis
 base_url="http://model-runner.docker.internal/engines/v1"
 api_key="docker"
 temperature=0
-model = "ai/llama3.2:lates"
+model = "ai/llama3.2:latest"
+# model = "ai/devstral-small:24B"
+model = "ai/granite-4.0-h-micro"
+# model = "ai/gemma3n"
+fallback_model = "ai/gemma3n"
+fallback_model = "ai/devstral-small:24B"
 tbl_name = "air_traffic"
 max_token = 10000
 
-con = ibis.postgres.connect(
+con_ibis = ibis.postgres.connect(
     user="postgres",
     password="password",
     host="postgres",
@@ -16,7 +21,7 @@ con = ibis.postgres.connect(
     database="my_db",
 )
 
-con.get_schema("air_traffic")
+con_ibis.get_schema("air_traffic")
 
 # air_traffic = con.sql("SELECT * FROM air_traffic LIMIT 10").execute()
 
@@ -24,74 +29,87 @@ con.get_schema("air_traffic")
 
 
 import duckdb
+import duckdb as db
 import pandas as pd
 import ibis
 from dataclasses import dataclass
+import sys
+sys.path.append("../")
 
 
-@dataclass
-class TableAttributes:
-    col_names: list[str]
-    col_types: list[str]
-    tbl_schema: str
+from sql_ai_agent2.db_handler import get_tbl_attr
+from sql_ai_agent2.api_handler import SqlAgent2
 
 
-def get_tbl_attr(tbl, tbl_name: str = None, con=None) -> TableAttributes:
-    """
-    Extract table schema (column names, types, and SQL CREATE TABLE string)
-    from DuckDB, PostgreSQL (via Ibis), or pandas DataFrame.
-    """
+air_traffic = con_ibis.sql("SELECT * FROM air_traffic LIMIT 100").execute()
 
-    # --- Case 1: ibis table (e.g., from postgres or duckdb) ---
-    if isinstance(tbl, ibis.Table):
-        schema = tbl.schema()
-        col_names = list(schema.names)
-        col_types = [str(t) for t in schema.types]
-        tbl_schema = ", ".join(f"{n} {t}" for n, t in zip(col_names, col_types))
-        tbl_name = tbl_name or tbl.get_name() or "table"
-        return TableAttributes(col_names, col_types, tbl_schema)
+air_traffic.head()
 
-    # --- Case 2: pandas DataFrame ---
-    elif isinstance(tbl, pd.DataFrame):
-        # Use duckdb to infer SQL types from pandas types
-        con = con or duckdb.connect()
-        tbl_name = tbl_name or "table"
-        con.register(tbl_name, tbl)
-        info = con.sql(f"DESCRIBE SELECT * FROM {tbl_name};").df()
-        col_names = info["column_name"].tolist()
-        col_types = info["column_type"].tolist()
-        tbl_schema = ", ".join(f"{n} {t}" for n, t in zip(col_names, col_types))
-        return TableAttributes(col_names, col_types, tbl_schema)
+schema_ibis =  get_tbl_attr(con = con_ibis, tbl_name = tbl_name)
+print("#" * 60)
+print("Schema")
+print(schema_ibis.schema)
+print("#" * 60)
+print("Schema Table")
+print(schema_ibis.table) 
 
-    # --- Case 3: string table name, connected DB (DuckDB or Postgres) ---
-    elif isinstance(tbl, str):
-        tbl_name = tbl_name or tbl
-        # Use DuckDB if provided or global connection
-        con = con or duckdb.connect()
-        try:
-            info = con.sql(f"DESCRIBE SELECT * FROM {tbl_name};").df()
-            col_names = info["column_name"].tolist()
-            col_types = info["column_type"].tolist()
-            tbl_schema = ", ".join(f"{n} {t}" for n, t in zip(col_names, col_types))
-            return TableAttributes(col_names, col_types, tbl_schema)
-        except duckdb.CatalogException:
-            raise ValueError(
-                f"Table '{tbl_name}' not found in DuckDB connection. "
-                "Provide a registered DataFrame, Ibis table, or valid connection."
-            )
+print("#" * 60)
+print("Setting the prompt")
+# prompt = set_prompt(tbl_name = tbl_name, 
+#                     schema = schema_ibis.schema, 
+#                     additional_context = "", 
+#                     question =  "test" )
 
-    else:
-        raise TypeError(
-            f"Unsupported type {type(tbl)}. "
-            "Provide a pandas DataFrame, Ibis table, or table name string."
-        )
+# print(prompt.messages[0].content)
+
+agent = SqlAgent2(api_key= api_key, 
+                  base_url=base_url,
+                  model = model,
+                  con = con_ibis,
+                  fallback= True,
+                  fallback_model= fallback_model,
+                  tbl_name = tbl_name)
+
+question = "How many rows are in the dataset?"
 
 
-get_tbl_attr(tbl = tbl_name, tbl_name = tbl_name, con = con)
-# agent = SqlAgent2(api_key, 
-#                   base_url, 
-#                   model=model, 
-#                   temperature = temperature,
-#                   max_token= max_token,
-#                   tbl_name = tbl_name)
+
+agent.ask_question(question = question, verbose=False)
+
+
+agent.ask_question(question = "What are the unique values of the Activity Type Code field?")
+
+# agent.ask_question(question = "How many landing where in 2020?")
+
+
+
+
+con_db = ibis.duckdb.connect()
+con_db.create_table(tbl_name, air_traffic)
+
+
+agent_db = SqlAgent2(api_key= api_key, 
+                  base_url=base_url,
+                  model = model,
+                  con = con_db,
+                  fallback= True,
+                  fallback_model= fallback_model,
+                  tbl_name = tbl_name)
+
+additional_context = "I am using a DuckDB database. Please ensure that the field names in the query are enclosed in double quotes."
+question = "What are the unique values of the Activity Type Code field?"
+agent_db.ask_question(question = question, additional_context= additional_context)
+agent.ask_question(question = question, additional_context= additional_context)
+
+
+additional_context = ""
+question = "What are the unique values of the Activity Type Code field?"
+agent_db.ask_question(question = question, additional_context= additional_context, trial= 3)
+
+
+# additional_context = ""
+# question ="What are the unique values of the Activity Type Code field?"
+# agent_db.ask_question(question = question, additional_context= additional_context)
+# agent.ask_question(question = question, additional_context= additional_context)
+
 
